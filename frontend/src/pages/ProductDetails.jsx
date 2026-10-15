@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getProductById } from '../services/api';
+import { getProductById, getWishlist, addToWishlist, removeFromWishlist } from '../services/api';
 import {
   ArrowLeft,
   ShoppingBag,
@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   Truck,
+  Heart,
 } from 'lucide-react';
 
 const ProductDetails = () => {
@@ -21,6 +22,9 @@ const ProductDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistBanner, setWishlistBanner] = useState(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -30,6 +34,15 @@ const ProductDetails = () => {
         const res = await getProductById(id);
         if (res.data.success && res.data.product) {
           setProduct(res.data.product);
+          // Check if product is in wishlist
+          try {
+            const wishRes = await getWishlist();
+            if (wishRes.data && wishRes.data.success && Array.isArray(wishRes.data.wishlist)) {
+              setIsWishlisted(wishRes.data.wishlist.some((item) => item._id === id));
+            }
+          } catch {
+            // Ignored
+          }
         } else {
           setError('Product not found');
         }
@@ -41,6 +54,44 @@ const ProductDetails = () => {
     };
     if (id) fetchProduct();
   }, [id]);
+
+  const handleWishlistToggle = async () => {
+    if (wishlistLoading) return;
+    setWishlistLoading(true);
+    setWishlistBanner(null);
+    try {
+      if (isWishlisted) {
+        const res = await removeFromWishlist(id);
+        if (res.data && res.data.success) {
+          setIsWishlisted(false);
+          window.dispatchEvent(new Event('wishlist-updated'));
+          setWishlistBanner({ type: 'info', text: 'Removed from your wishlist' });
+          setTimeout(() => setWishlistBanner(null), 3000);
+        }
+      } else {
+        const res = await addToWishlist(id);
+        if (res.data && res.data.success) {
+          setIsWishlisted(true);
+          window.dispatchEvent(new Event('wishlist-updated'));
+          setWishlistBanner({ type: 'success', text: 'Added to your wishlist!' });
+          setTimeout(() => setWishlistBanner(null), 3000);
+        }
+      }
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setIsWishlisted(true);
+        window.dispatchEvent(new Event('wishlist-updated'));
+      } else {
+        setWishlistBanner({
+          type: 'error',
+          text: err.response?.data?.message || 'Unable to update wishlist. Please try again.'
+        });
+        setTimeout(() => setWishlistBanner(null), 3500);
+      }
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
 
   const handleAddToCart = () => {
     setAddedToCart(true);
@@ -111,6 +162,28 @@ const ProductDetails = () => {
         </div>
       )}
 
+      {/* Wishlist toast */}
+      {wishlistBanner && (
+        <div
+          className={`mb-6 p-4 rounded-2xl flex items-center space-x-3 text-sm font-medium shadow-sm animate-fade-in ${
+            wishlistBanner.type === 'success'
+              ? 'bg-rose-50 border border-rose-200 text-rose-800'
+              : wishlistBanner.type === 'error'
+              ? 'bg-red-50 border border-red-200 text-red-800'
+              : 'bg-gray-100 border border-gray-200 text-gray-800'
+          }`}
+        >
+          {wishlistBanner.type === 'success' ? (
+            <Heart className="w-5 h-5 fill-rose-500 text-rose-500 shrink-0" />
+          ) : wishlistBanner.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-gray-600 shrink-0" />
+          )}
+          <span>{wishlistBanner.text}</span>
+        </div>
+      )}
+
       {/* Main layout */}
       <div className="card p-6 lg:p-10 grid grid-cols-1 lg:grid-cols-2 gap-8 overflow-hidden">
 
@@ -131,6 +204,30 @@ const ProductDetails = () => {
             <Tag className="w-3.5 h-3.5 text-indigo-500" />
             <span>{category}</span>
           </span>
+
+          {/* Quick Heart on Image */}
+          <button
+            id="detail-image-wishlist-btn"
+            type="button"
+            onClick={handleWishlistToggle}
+            disabled={wishlistLoading}
+            aria-label={isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}
+            className={`press absolute top-4 right-4 p-2.5 rounded-full backdrop-blur-md transition-all shadow-sm ${
+              isWishlisted
+                ? 'bg-white/95 text-rose-500 hover:bg-rose-50'
+                : 'bg-white/80 text-gray-600 hover:text-rose-500 hover:bg-white'
+            }`}
+          >
+            {wishlistLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+            ) : (
+              <Heart
+                className={`w-5 h-5 transition-colors ${
+                  isWishlisted ? 'fill-rose-500 text-rose-500' : ''
+                }`}
+              />
+            )}
+          </button>
         </div>
 
         {/* Info */}
@@ -199,20 +296,51 @@ const ProductDetails = () => {
               ))}
             </div>
 
-            <button
-              id="add-to-cart-btn"
-              onClick={handleAddToCart}
-              disabled={isOutOfStock}
-              className={`press w-full py-4 px-6 rounded-2xl font-semibold text-base flex items-center justify-center space-x-3 shadow-sm transition-all ${
-                isOutOfStock
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                  : 'text-white hover:shadow-md'
-              }`}
-              style={!isOutOfStock ? { background: '#1d1d1f' } : {}}
-            >
-              <ShoppingBag className="w-5 h-5" />
-              <span>{isOutOfStock ? 'Currently Unavailable' : 'Add to Cart'}</span>
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                id="add-to-cart-btn"
+                onClick={handleAddToCart}
+                disabled={isOutOfStock}
+                className={`press w-full py-3.5 px-5 rounded-2xl font-semibold text-base flex items-center justify-center space-x-2.5 shadow-sm transition-all ${
+                  isOutOfStock
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                    : 'text-white hover:shadow-md'
+                }`}
+                style={!isOutOfStock ? { background: '#1d1d1f' } : {}}
+              >
+                <ShoppingBag className="w-5 h-5" />
+                <span>{isOutOfStock ? 'Currently Unavailable' : 'Add to Cart'}</span>
+              </button>
+
+              <button
+                id="detail-wishlist-toggle-btn"
+                type="button"
+                onClick={handleWishlistToggle}
+                disabled={wishlistLoading}
+                className={`press w-full py-3.5 px-5 rounded-2xl font-semibold text-base flex items-center justify-center space-x-2.5 transition-all border ${
+                  isWishlisted
+                    ? 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100/70'
+                    : 'bg-white border-black/10 text-gray-800 hover:bg-gray-50'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {wishlistLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+                    <span>Saving...</span>
+                  </>
+                ) : isWishlisted ? (
+                  <>
+                    <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
+                    <span>In Wishlist</span>
+                  </>
+                ) : (
+                  <>
+                    <Heart className="w-5 h-5 text-gray-500" />
+                    <span>Add to Wishlist</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

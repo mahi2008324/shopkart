@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import { getWishlist } from '../services/api';
 import {
   ShoppingBag,
   LogOut,
@@ -11,12 +13,17 @@ import {
   User,
   Settings,
   ChevronDown,
+  Heart,
+  ShoppingCart,
+  Package,
 } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { cartCount } = useCart();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
   const dropdownRef = useRef(null);
 
   // Close dropdown on outside click
@@ -29,6 +36,28 @@ const Navbar = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  const fetchWishlistCount = useCallback(async () => {
+    if (!user) {
+      setWishlistCount(0);
+      return;
+    }
+    try {
+      const res = await getWishlist();
+      if (res.data && res.data.success) {
+        setWishlistCount(res.data.count ?? (res.data.wishlist?.length || 0));
+      }
+    } catch {
+      // Ignored
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchWishlistCount();
+    const handler = () => fetchWishlistCount();
+    window.addEventListener('wishlist-updated', handler);
+    return () => window.removeEventListener('wishlist-updated', handler);
+  }, [fetchWishlistCount]);
 
   const handleLogout = async () => {
     setDropdownOpen(false);
@@ -75,6 +104,18 @@ const Navbar = () => {
                 <Grid className="w-4 h-4" />
                 <span>Products</span>
               </NavLink>
+              <NavLink id="navbar-wishlist-link" to="/wishlist" className={navLinkClass}>
+                <Heart className="w-4 h-4 text-rose-500" />
+                <span>Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : '(0)'}</span>
+              </NavLink>
+              <NavLink id="navbar-cart-link" to="/cart" className={navLinkClass}>
+                <ShoppingCart className="w-4 h-4 text-indigo-500" />
+                <span>Cart ({cartCount})</span>
+              </NavLink>
+              <NavLink id="navbar-orders-link" to="/orders" className={navLinkClass}>
+                <Package className="w-4 h-4 text-emerald-500" />
+                <span>Orders</span>
+              </NavLink>
             </nav>
           )}
 
@@ -118,6 +159,39 @@ const Navbar = () => {
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5 truncate">{user.email}</p>
                     </div>
+
+                    {/* Wishlist */}
+                    <Link
+                      id="dropdown-wishlist-link"
+                      to="/wishlist"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center space-x-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-black/5 hover:text-gray-900 transition-colors rounded-lg mx-1"
+                    >
+                      <Heart className="w-4 h-4 text-rose-500" />
+                      <span>Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}</span>
+                    </Link>
+
+                    {/* Cart */}
+                    <Link
+                      id="dropdown-cart-link"
+                      to="/cart"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center space-x-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-black/5 hover:text-gray-900 transition-colors rounded-lg mx-1"
+                    >
+                      <ShoppingCart className="w-4 h-4 text-indigo-500" />
+                      <span>Cart ({cartCount})</span>
+                    </Link>
+
+                    {/* My Orders */}
+                    <Link
+                      id="dropdown-orders-link"
+                      to="/orders"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center space-x-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-black/5 hover:text-gray-900 transition-colors rounded-lg mx-1"
+                    >
+                      <Package className="w-4 h-4 text-emerald-500" />
+                      <span>My Orders</span>
+                    </Link>
 
                     {/* My Profile */}
                     <Link

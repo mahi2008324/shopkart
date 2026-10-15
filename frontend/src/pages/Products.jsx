@@ -1,24 +1,87 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getProducts } from '../services/api';
+import { useSearchParams } from 'react-router-dom';
+import { getProducts, getWishlist } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import SearchBar from '../components/SearchBar';
-import { Loader2, AlertCircle, ShoppingBag, RefreshCw } from 'lucide-react';
+import AddProductModal from '../components/AddProductModal';
+import { Loader2, AlertCircle, ShoppingBag, RefreshCw, Plus, CheckCircle2 } from 'lucide-react';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [successBanner, setSuccessBanner] = useState(null);
+  const [savedProductIds, setSavedProductIds] = useState(new Set());
 
-  const [search, setSearch]     = useState('');
-  const [category, setCategory] = useState('All');
-  const [sort, setSort]         = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read current filters from the browser URL address bar
+  const category = searchParams.get('category') || 'All';
+  const sort = searchParams.get('sort') || '';
+  const searchParam = searchParams.get('search') || '';
+
+  // Local state for the search input to keep typing responsive
+  const [search, setSearch] = useState(searchParam);
+
+  // Keep local search input synced if URL search param changes (e.g. browser back/forward or reset)
+  useEffect(() => {
+    setSearch(searchParam);
+  }, [searchParam]);
+
+  // Debounce updating the URL search param when typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        const trimmed = search.trim();
+        if (trimmed) {
+          next.set('search', trimmed);
+        } else {
+          next.delete('search');
+        }
+        return next;
+      }, { replace: true });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search, setSearchParams]);
+
+  const handleCategoryChange = (newCategory) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newCategory && newCategory !== 'All') {
+        next.set('category', newCategory);
+      } else {
+        next.delete('category');
+      }
+      return next;
+    }, { replace: true });
+  };
+
+  const handleSortChange = (newSort) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newSort) {
+        next.set('sort', newSort);
+      } else {
+        next.delete('sort');
+      }
+      return next;
+    }, { replace: true });
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setSearchParams({}, { replace: true });
+  };
 
   const fetchProductsList = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = {};
-      if (search.trim()) params.search = search.trim();
+      if (searchParam.trim()) params.search = searchParam.trim();
       if (category && category !== 'All') params.category = category;
       if (sort) params.sort = sort;
 
@@ -33,21 +96,54 @@ const Products = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, category, sort]);
+  }, [searchParam, category, sort]);
+
+  const fetchWishlistIds = useCallback(async () => {
+    try {
+      const res = await getWishlist();
+      if (res.data && res.data.success && Array.isArray(res.data.wishlist)) {
+        setSavedProductIds(new Set(res.data.wishlist.map((item) => item._id)));
+      }
+    } catch {
+      // Ignored if not authenticated or network error
+    }
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchProductsList(), 300);
-    return () => clearTimeout(timer);
+    fetchProductsList();
   }, [fetchProductsList]);
 
-  const handleResetFilters = () => {
-    setSearch('');
-    setCategory('All');
-    setSort('');
+  useEffect(() => {
+    fetchWishlistIds();
+    const handleUpdate = () => fetchWishlistIds();
+    window.addEventListener('wishlist-updated', handleUpdate);
+    return () => window.removeEventListener('wishlist-updated', handleUpdate);
+  }, [fetchWishlistIds]);
+
+  const handleProductCreated = (newProduct) => {
+    setSuccessBanner(`"${newProduct.name}" was added successfully to the catalogue!`);
+    fetchProductsList();
+    setTimeout(() => setSuccessBanner(null), 5000);
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+      {/* Success Notification Banner */}
+      {successBanner && (
+        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-center justify-between text-emerald-800 text-sm font-medium animate-fade-in shadow-sm">
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{successBanner}</span>
+          </div>
+          <button
+            onClick={() => setSuccessBanner(null)}
+            className="text-xs text-emerald-600 hover:text-emerald-800 underline ml-4"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-6 border-b border-black/6">
@@ -63,14 +159,26 @@ const Products = () => {
           </p>
         </div>
 
-        <div
-          className="mt-4 md:mt-0 inline-flex items-center space-x-2 text-sm font-medium bg-white border border-black/6 px-3.5 py-2 rounded-xl shadow-sm"
-          style={{ color: '#1d1d1f' }}
-        >
-          <ShoppingBag className="w-4 h-4 text-indigo-500" />
-          <span>
-            <strong>{products.length}</strong> items
-          </span>
+        <div className="mt-4 md:mt-0 flex items-center space-x-3">
+          <div
+            className="inline-flex items-center space-x-2 text-sm font-medium bg-white border border-black/6 px-3.5 py-2 rounded-xl shadow-sm"
+            style={{ color: '#1d1d1f' }}
+          >
+            <ShoppingBag className="w-4 h-4 text-indigo-500" />
+            <span>
+              <strong>{products.length}</strong> items
+            </span>
+          </div>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            id="add-product-btn"
+            className="press inline-flex items-center space-x-2 px-4 py-2 bg-black text-white text-sm font-semibold rounded-xl shadow-sm hover:bg-gray-800 transition-colors"
+            style={{ background: '#1d1d1f' }}
+          >
+            <Plus className="w-4 h-4 text-indigo-400" />
+            <span>Add Product</span>
+          </button>
         </div>
       </div>
 
@@ -78,9 +186,9 @@ const Products = () => {
         search={search}
         setSearch={setSearch}
         category={category}
-        setCategory={setCategory}
+        setCategory={handleCategoryChange}
         sort={sort}
-        setSort={setSort}
+        setSort={handleSortChange}
         onReset={handleResetFilters}
       />
 
@@ -137,10 +245,21 @@ const Products = () => {
       {!loading && !error && products.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {products.map((product) => (
-            <ProductCard key={product._id} product={product} />
+            <ProductCard
+              key={product._id}
+              product={product}
+              initialSaved={savedProductIds.has(product._id)}
+            />
           ))}
         </div>
       )}
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onProductCreated={handleProductCreated}
+      />
     </div>
   );
 };

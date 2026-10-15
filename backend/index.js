@@ -5,6 +5,9 @@ import 'dotenv/config';
 
 import customerRoutes from './src/routes/customer.routes.js';
 import productRoutes from './src/routes/product.routes.js';
+import wishlistRoutes from './src/routes/wishlist.routes.js';
+import cartRoutes from './src/routes/cart.routes.js';
+import orderRoutes from './src/routes/order.routes.js';
 import connectDB from './src/utils/db.js';
 
 const app = express();
@@ -34,6 +37,9 @@ app.use(cookieParser());
 // Routes
 app.use('/customers', customerRoutes);
 app.use('/products', productRoutes);
+app.use('/wishlist', wishlistRoutes);
+app.use('/cart', cartRoutes);
+app.use('/orders', orderRoutes);
 
 // Health check
 app.get('/', (req, res) => {
