@@ -135,46 +135,6 @@ cd backend
 node test-lab06.js
 ```
 
----
-
-## 🚢 Deployment Guide
-
-### A. Deploy Backend to Render (Free)
-1. Sign in to [Render.com](https://render.com).
-2. Click **New +** → **Web Service** and connect your GitHub repository `shopkart`.
-3. Configure the service:
-   - **Root Directory**: `backend`
-   - **Environment**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-4. In **Environment Variables**, add:
-   - `NODE_ENV` = `production`
-   - `PORT` = `10000`
-   - `MONGO_URI` = `<your MongoDB Atlas connection string>`
-   - `JWT_SECRET` = `<your random secret key>`
-   - `JWT_EXPIRES_IN` = `7d`
-   - `CLIENT_URL` = `https://<your-frontend-app>.vercel.app`
-   - `RAZORPAY_KEY_ID` = `<your test key>`
-   - `RAZORPAY_KEY_SECRET` = `<your test secret>`
-5. Click **Create Web Service** and note your URL (e.g., `https://shopkart-backend.onrender.com`).
-
----
-
-### B. Deploy Frontend to Vercel (Free)
-1. Sign in to [Vercel.com](https://vercel.com).
-2. Click **Add New...** → **Project** and import `shopkart`.
-3. In Project Settings:
-   - **Root Directory**: Select `frontend`
-   - **Framework Preset**: `Vite`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-4. In **Environment Variables**:
-   - `VITE_API_URL` = `https://shopkart-backend.onrender.com` (backend URL without trailing slash)
-5. Click **Deploy**.
-6. Once deployed, copy your live Vercel URL and update `CLIENT_URL` in your Render backend settings.
-
----
-
 ## 🔒 Security Best Practices
 - No `.env` files, production database credentials, or secret keys are committed.
 - Sensitive environment variables are documented only in `.env.example`.
