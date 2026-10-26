@@ -46,9 +46,17 @@ app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'ShopKart API is running' });
 });
 
-app.listen(PORT, () => {
-  connectDB();
-  console.log(`Server running on http://localhost:${PORT}`)
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
+  }
+};
+
+startServer();
 
 export default app;
